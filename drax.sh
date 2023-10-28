@@ -1,34 +1,44 @@
 #!/bin/bash
 
-# Função para gerar um IP aleatório
+# Função para gerar um IP aleatório que não seja igual ao IP anterior
 generate_random_ip() {
-    ip_parts=()
-    for _ in {1..4}; do
-        ip_parts+=($((RANDOM % 256)))
+    while true; do
+        new_ip=$(echo $((RANDOM%256)).$((RANDOM%256)).$((RANDOM%256)).$((RANDOM%256)))
+        if [ "$new_ip" != "$previous_ip" ]; then
+            echo "$new_ip"
+            return
+        fi
     done
-    echo "${ip_parts[0]}.${ip_parts[1]}.${ip_parts[2]}.${ip_parts[3]}"
 }
 
 # Função para escolher um fuso horário aleatório
 choose_random_timezone() {
-    timezones=("America/New_York" "Europe/London" "Asia/Tokyo")
-    random_timezone=${timezones[$((RANDOM % ${#timezones[@]}))]}
+    timezones=( $(timedatectl list-timezones) )
+    random_timezone="${timezones[RANDOM % ${#timezones[@]}]}"
     echo "$random_timezone"
 }
 
-# Loop para alterar o IP e o fuso horário a cada 5 segundos
-while true; do
-    new_ip=$(generate_random_ip)
-    new_timezone=$(choose_random_timezone)
+# Armazenar o IP e fuso horário originais
+original_ip=$(ifconfig eth0 | grep 'inet addr' | awk '{print $2}' | cut -d ':' -f 2)
+original_timezone=$(timedatectl show --property=Timezone --value)
 
-    # Alterar o IP
-    sudo ifconfig eth0 "$new_ip"
+# Gerar um novo IP que não seja igual ao IP original
+new_ip=$(generate_random_ip)
+new_timezone=$(choose_random_timezone)
 
-    # Alterar o fuso horário
-    sudo timedatectl set-timezone "$new_timezone"
+# Alterar o IP
+sudo ifconfig eth0 $new_ip
 
-    echo "IP alterado para $new_ip, Fuso horário alterado para $new_timezone"
+# Alterar o fuso horário
+sudo timedatectl set-timezone $new_timezone
 
-    # Aguarde 5 segundos antes da próxima alteração
-    sleep 5
-done
+echo "IP alterado para $new_ip, Fuso horário alterado para $new_timezone"
+
+# Solicitar confirmação para reverter as alterações
+read -p "Pressione Enter para reverter as alterações e encerrar o script..."
+
+# Reverter as alterações para o IP e fuso horário originais
+sudo ifconfig eth0 $original_ip
+sudo timedatectl set-timezone $original_timezone
+
+echo "Alterações revertidas. Script encerrado."
